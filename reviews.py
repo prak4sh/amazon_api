@@ -35,16 +35,25 @@ def _requests(url):
     headers['referer'] = url
     response = session.get(url, headers=headers)
     print(f'Url: {url}, {response.status_code}')
-    return response
+    if check_title(response):
+        return response
+    else:
+        return _request_via_api(url)
 
 def _soup(response):
     return BeautifulSoup(response.text, 'html.parser')
 
+def check_title(response):
+    soup = _soup(response)
+    title = soup.find(class_="product-title")
+    if title:
+        return True
+    else:
+        return False
+
 def get_reviews(asin, page=1):
     url = f'https://www.amazon.com/product-reviews/{asin}?pageNumber={page}'
     response = _requests(url)
-    with open('test.html','w') as f:
-        f.write(response.text)
     soup = _soup(response)
     title = soup.find(class_="product-title")
     if title:
