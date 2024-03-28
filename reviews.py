@@ -4,10 +4,29 @@ from bs4 import BeautifulSoup
 import re
 from dotenv import load_dotenv
 import os
+import time
+import csv
+import random
 
 load_dotenv()
 api = os.getenv('API_KEY')
 session = requests.Session()
+
+amazon_domains = [
+    ('wwww.amazon.com', 'US'),
+    ('wwww.amazon.co.uk', 'UK'),
+    ('wwww.amazon.ca', 'CA'),
+    ('wwww.amazon.de', 'DE'),
+    ('wwww.amazon.fr', 'FR'),
+    ('wwww.amazon.co.jp', 'JP'),
+    ('wwww.amazon.in', 'IN'),
+    ('wwww.amazon.com.au', 'AU'),
+    ('wwww.amazon.cn', 'CN'),
+    ('wwww.amazon.it', 'IT'),
+    ('wwww.amazon.es', 'ES'),
+    ('wwww.amazon.com.br', 'BR'),
+    ('wwww.amazon.com.mx', 'MX')
+]
 
 headers = {
             'authority': 'www.amazon.com',
@@ -23,17 +42,44 @@ headers = {
             'accept-language': 'en-US,en;q=0.9',
         }
 
+def get_UA():
+    UserAgents_csv = "userAgent.csv"
+    dir_script = os.path.dirname(os.path.abspath(__file__))
+    path_csv = os.path.join(dir_script, UserAgents_csv)
+    random_user_agent_list = []
+    with open(path_csv, 'r', encoding="utf-8") as csvfile:
+        csv_reader = csv.reader(csvfile)
+        random_user_agent_list = [
+            item for row in csv_reader for item in row]
+    ua = random.choice(random_user_agent_list)
+    return ua
+
+def get_domain(code):
+    result = None
+    for domain in amazon_domains:
+        if code == domain[1]:
+            result = domain[0]
+    return result
+
 def _request_via_api(url):
     payload = {'api_key': api, 'url': url}
     headers['referer'] = url
-    response = requests.get('http://api.scraperapi.com',params=payload, headers=headers)
-    print(f'Url: {url}, {response.status_code}')
+    headers['user-agent'] = get_UA()
+    while True:
+        response = requests.get('http://api.scraperapi.com',params=payload, headers=headers)
+        print(f'Url: {url}, {response.status_code}')
+        if response.status_code == 200:
+            break
+        else:
+            time.sleep(2)
     return response
 
-def _requests(url):
+def _requests(url, domain):
     global session
+    headers['authority'] = domain
     headers['referer'] = url
-    response = session.get(url, headers=headers)
+    headers['user-agent'] = get_UA()
+    response = requests.get(url, headers=headers)
     print(f'Url: {url}, {response.status_code}')
     if check_title(response):
         return response
@@ -51,16 +97,20 @@ def check_title(response):
     else:
         return False
 
-def get_reviews(asin, page=1):
-    url = f'https://www.amazon.com/product-reviews/{asin}?pageNumber={page}'
-    response = _requests(url)
+def get_reviews(asin, domain_code='US',page=1):
+    domain = get_domain(domain_code)
+    if not domain:
+        print('Domain not in list')
+        return None
+    url = f'https://{domain}/product-reviews/{asin}?pageNumber={page}'
+    response = _requests(url, domain)
     soup = _soup(response)
     title = soup.find(class_="product-title")
     if title:
         title = title.a.get_text()
-    print(title)
     review_section = soup.find(id='cm_cr-review_list')
-    # review_section = soup.find(class_='review-views')
+    nextPage = review_section.find(class_="a-last")
+    print(nextPage)
     review_divs = review_section.find_all(class_='review')
     for review_div in review_divs:
         author = review_div.find(class_="a-profile-name").get_text()
@@ -83,5 +133,4 @@ def get_reviews(asin, page=1):
         print(title)
 
 if __name__== "__main__":
-    asin = '1546017453'
-    get_reviews(asin, 5)
+    get_UA()
