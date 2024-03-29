@@ -68,7 +68,7 @@ def _request_via_api(url):
     headers['user-agent'] = get_UA()
     while True:
         response = requests.get('http://api.scraperapi.com',params=payload, headers=headers)
-        print(f'Url: {url}, {response.status_code}')
+        # print(f'Url: {url}, {response.status_code}')
         if response.status_code == 200:
             break
         else:
@@ -81,7 +81,7 @@ def _requests(url, domain):
     headers['referer'] = url
     headers['user-agent'] = get_UA()
     response = requests.get(url, headers=headers)
-    print(f'Url: {url}, {response.status_code}')
+    # print(f'Url: {url}, {response.status_code}')
     if check_title(response):
         return response
     else:
@@ -110,10 +110,10 @@ def get_date(review_date, domain_code):
 def get_reviews(asin, domain_code='US',page=1):
     domain = get_domain(domain_code)
     if not domain:
-        print('Domain not in list')
+        # print('Domain not in list')
         return None
     url = f'https://{domain}/product-reviews/{asin}?pageNumber={page}'
-    print(url)
+    # print(url)
     response = _requests(url, domain)
     soup = _soup(response)
     title = soup.find(class_="product-title")
