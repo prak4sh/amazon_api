@@ -7,25 +7,26 @@ import os
 import time
 import csv
 import random
+from urllib.parse import urljoin
 
 load_dotenv()
 api = os.getenv('API_KEY')
 session = requests.Session()
 
 amazon_domains = [
-    ('wwww.amazon.com', 'US'),
-    ('wwww.amazon.co.uk', 'UK'),
-    ('wwww.amazon.ca', 'CA'),
-    ('wwww.amazon.de', 'DE'),
-    ('wwww.amazon.fr', 'FR'),
-    ('wwww.amazon.co.jp', 'JP'),
-    ('wwww.amazon.in', 'IN'),
-    ('wwww.amazon.com.au', 'AU'),
-    ('wwww.amazon.cn', 'CN'),
-    ('wwww.amazon.it', 'IT'),
-    ('wwww.amazon.es', 'ES'),
-    ('wwww.amazon.com.br', 'BR'),
-    ('wwww.amazon.com.mx', 'MX')
+    ('www.amazon.com', 'US'),
+    ('www.amazon.co.uk', 'UK'),
+    ('www.amazon.ca', 'CA'),
+    ('www.amazon.de', 'DE'),
+    ('www.amazon.fr', 'FR'),
+    ('www.amazon.co.jp', 'JP'),
+    ('www.amazon.in', 'IN'),
+    ('www.amazon.com.au', 'AU'),
+    ('www.amazon.cn', 'CN'),
+    ('www.amazon.it', 'IT'),
+    ('www.amazon.es', 'ES'),
+    ('www.amazon.com.br', 'BR'),
+    ('www.amazon.com.mx', 'MX')
 ]
 
 headers = {
@@ -96,6 +97,15 @@ def check_title(response):
         return True
     else:
         return False
+    
+def get_date(review_date, domain_code):
+    date_path = r'(?= on )(.*)'
+    on = 'on'
+    if domain_code == 'IT':
+        on = 'il'
+        date_path = r'(?= il )(.*)'
+    date = re.search(date_path, review_date).group(0).replace(on,'').strip()
+    return date
 
 def get_reviews(asin, domain_code='US',page=1):
     domain = get_domain(domain_code)
@@ -103,34 +113,112 @@ def get_reviews(asin, domain_code='US',page=1):
         print('Domain not in list')
         return None
     url = f'https://{domain}/product-reviews/{asin}?pageNumber={page}'
+    print(url)
     response = _requests(url, domain)
     soup = _soup(response)
     title = soup.find(class_="product-title")
     if title:
         title = title.a.get_text()
     review_section = soup.find(id='cm_cr-review_list')
+    total_string = soup.find('div',{'data-hook':'cr-filter-info-review-rating-count'})
+    
+    total_reviews = None
+    total_ratings = None
+    total_page = 1
+    if total_string:
+        total_string = total_string.get_text(strip=True)
+        pattern = r'(\d{1,3}(?:,\d{3})*)'
+        found = re.findall(pattern, total_string)
+        if found:
+            try:
+                total_ratings = int(found[0].replace(',',''))
+            except:
+                pass
+            try:
+                total_reviews = int(found[1].replace(',',''))
+                total_page = int(total_reviews/10)
+            except:
+                pass
     nextPage = review_section.find(class_="a-last")
-    print(nextPage)
     review_divs = review_section.find_all(class_='review')
-    for review_div in review_divs:
-        author = review_div.find(class_="a-profile-name").get_text()
-        title = review_div.find(class_='review-title')
-        if title:
-            title = title.find_all('span')[-1].get_text().strip()
-        rating = review_div.find(class_='review-rating').span.get_text()
-        rating = rating.split(' ')[0]
-        detail = review_div.find(class_="review-text").get_text().strip()
-        review_date = review_div.find(class_='review-date').get_text()
-        date_path = r'(?= on )(.*)'
-        date = re.search(date_path, review_date).group(0).replace('on','').strip()
-        review = {
-            'Author': author,
-            'Title': title,
-            'Date': date,
-            'Rating':rating,
-            'Review': detail
+    summary_string = soup.select('.histogram .a-text-right')
+    rating_5 = summary_string[0].get_text().strip()
+    rating_4 = summary_string[1].get_text().strip()
+    rating_3 = summary_string[2].get_text().strip()
+    rating_2 = summary_string[3].get_text().strip()
+    rating_1 = summary_string[4].get_text().strip()
+    info = {
+        'status': 'OK',
+        'current_page': page,
+        'total_page': total_page,
+        'data': {
+            'asin': asin,
+            'title': title,
+            'country': domain_code,
+            'domain': domain,
+            'total_ratings': total_ratings,
+            'total_reviews': total_reviews,
+            'rating_summary': {
+                '5 stars': rating_5,
+                '4 stars': rating_4,
+                '3 stars': rating_3,
+                '2 stars': rating_2,
+                '1 star': rating_1,
+            },
+            'reviews': list()
         }
-        print(title)
+    }
+    all_reviews = []
+    for review_div in review_divs:
+        author = review_div.find(class_="a-profile-name")
+        if author:
+            author = author.get_text()
+        title = review_div.find(class_='review-title')
+        link = None
+        if title:
+            link = domain + title.get('href')
+            title = title.find_all('span')[-1].get_text().strip()
+        rating = review_div.find(class_='review-rating')
+        if rating:
+            rating = rating.span.get_text()
+            rating = rating.split(' ')[0]
+        detail = review_div.find(class_="review-text")
+        if detail:
+            detail = detail.get_text().strip()
+        date = review_div.find(class_='review-date')
+        avatar = review_div.find(class_='a-profile-avatar')
+        if avatar:
+            avatar = avatar.img.get('src')
+        verified_div = review_div.find('span',{'data-hook': 'avp-badge'})
+        if verified_div:
+            verified = True
+        else:
+            verified = False
+        if date:
+            date = get_date(date.get_text(), domain_code)
+        helpful_string = review_div.find(class_='cr-vote-text')
+        if helpful_string:
+            helpful_string = helpful_string.get_text(strip=True)
+        review_id = review_div.get('id')
+        images = review_div.find_all(class_='review-image-tile')
+        if len(images) > 0:
+            images = [x.get('src') for x in images]
+        review = {
+            'review_id': review_id,
+            'review_title': title,
+            'review_date': date,
+            'review_rating':rating,
+            'review_details': detail,
+            'review_author': author,
+            # 'author_avatar': avatar,
+            'verified_purchase': verified,
+            'helpful_vote': helpful_string,
+            'review_link': link,
+            'review_images': images,
+        }
+        all_reviews.append(review)
+    info['data']['reviews'] = all_reviews
+    return info
 
 if __name__== "__main__":
-    get_UA()
+    get_reviews('1546017453','US', 1)
