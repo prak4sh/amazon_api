@@ -45,8 +45,7 @@ headers = {
 
 def get_UA():
     UserAgents_csv = "userAgent.csv"
-    dir_script = os.path.dirname(os.path.abspath(__file__))
-    path_csv = os.path.join(dir_script, UserAgents_csv)
+    path_csv = os.path.join('data', UserAgents_csv)
     random_user_agent_list = []
     with open(path_csv, 'r', encoding="utf-8") as csvfile:
         csv_reader = csv.reader(csvfile)
