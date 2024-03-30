@@ -8,7 +8,6 @@ import os
 import time
 import csv
 import random
-from urllib.parse import urljoin
 
 load_dotenv()
 api = os.getenv('API_KEY')
@@ -26,7 +25,8 @@ amazon_domains = [
     ('www.amazon.it', 'IT'),
     ('www.amazon.es', 'ES'),
     ('www.amazon.com.br', 'BR'),
-    ('www.amazon.com.mx', 'MX')
+    ('www.amazon.com.mx', 'MX'),
+    ('www.amazon.nl', 'NL')
 ]
 headers = {
         'authority': 'www.amazon.com',
@@ -103,10 +103,13 @@ class AmazonAPI:
     def get_date(self, review_date, domain_code):
         date_path = r'(?= on )(.*)'
         on = 'on'
-        if domain_code == 'IT':
-            on = 'il'
-            date_path = r'(?= il )(.*)'
-        date = re.search(date_path, review_date).group(0).replace(on,'').strip()
+        # if domain_code == 'IT':
+        #     on = 'il'
+        #     date_path = r'(?= il )(.*)'
+        try:
+            date = re.search(date_path, review_date).group(0).replace(on,'').strip()
+        except:
+            date = None
         return date
 
     def get_reviews(self, asin, domain_code='US',page=1):
@@ -114,7 +117,7 @@ class AmazonAPI:
         if not domain:
             # print('Domain not in list')
             return None
-        url = f'https://{domain}/product-reviews/{asin}?pageNumber={page}'
+        url = f'https://{domain}/product-reviews/{asin}?pageNumber={page}&language=en_GB'
         # print(url)
         response = self._requests(url, domain)
         soup = self._soup(response)
@@ -178,7 +181,10 @@ class AmazonAPI:
             title = review_div.find(class_='review-title')
             link = None
             if title:
-                link = domain + title.get('href')
+                try:
+                    link = domain + title.get('href')
+                except:
+                    pass
                 title = title.find_all('span')[-1].get_text().strip()
             rating = review_div.find(class_='review-rating')
             if rating:
