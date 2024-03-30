@@ -244,7 +244,8 @@ def reviews():
         asin = data['asin']
         country = data['country']
         if 'page' in data:
-            page = data['page']
+            # page = data['page']
+            pass
         return jsonify(amApi.get_reviews(asin, country, page))
     else:
         return jsonify({'Error': 'Asin and Country not provided'})
