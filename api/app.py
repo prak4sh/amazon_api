@@ -238,10 +238,13 @@ def index():
 
 @app.route('/reviews/<country>/<asin>', methods=['GET'])
 def reviews(country, asin):
-    data = request.form
-    page = 1
-    country = country.upper()
-    return jsonify(amApi.get_reviews(asin, country, page))
+    if country and asin:
+        page = 1
+        country = country.upper()
+        return jsonify(amApi.get_reviews(asin, country, page))
+    else:
+        return jsonify({'Error': 'Country and Asin code not provided'})
+
 
 
 if __name__== "__main__":
